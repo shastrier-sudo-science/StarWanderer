@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Star Wanderer — A Solo Space Sandbox</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body {
+  background: #000010;
+  color: #88ccff;
+  font-family: 'Courier New', Courier, monospace;
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+}
+.game-container {
+  width: 100vw;
+  height: 100vh;
+  position: relative;
+  overflow: hidden;
+  background: #000010;
+}
+.game-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: crosshair;
+  image-rendering: pixelated;
+}
+.error-banner {
+  position: absolute; top: 0; left: 0; right: 0;
+  background: #440000; color: #ffaaaa; padding: 10px 16px;
+  font-size: 0.8rem; z-index: 999; display: none;
+  border-bottom: 1px solid #ff4444;
+}
+/* ---- Station Overlay ---- */
+.station-overlay {
+  position: absolute;
+  inset: 0;
+  background: #000014;
+  overflow-y: auto;
+  display: none;
+  flex-direction: column;
+}
+.station-overlay.visible { display: flex; }
+.station-ui { display: flex; flex-direction: column; height: 100%; max-width: 1200px; margin: 0 auto; width: 100%; padding: 0 16px 16px; }
+.station-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 0 12px; border-bottom: 1px solid #1a3a5a; flex-shrink: 0; }
+.station-name { font-size: 1.5rem; color: #00ffcc; text-shadow: 0 0 10px #00ffcc44; letter-spacing: 2px; }
+.station-system { font-size: 0.8rem; color: #446688; margin-top: 2px; }
+.player-info { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.credits { font-size: 1.1rem; color: #ffdd44; text-shadow: 0 0 8px #ffdd4444; }
+.cargo-info { font-size: 0.8rem; color: #66aacc; }
+.tab-bar { display: flex; gap: 4px; padding: 10px 0 0; flex-shrink: 0; flex-wrap: wrap; align-items: center; }
+.tab-btn { background: #0a1a2a; border: 1px solid #1a3a5a; color: #446688; padding: 8px 20px; cursor: pointer; font-family: 'Courier New', monospace; font-size: 0.8rem; letter-spacing: 1px; transition: all .15s; }
+.tab-btn:hover { background: #0f2540; color: #88aacc; border-color: #2a5a88; }
+.tab-btn.active { background: #0f3050; border-color: #00aaff; color: #00ccff; text-shadow: 0 0 8px #00aaff44; }
+.undock-btn { margin-left: auto; background: #1a0a0a; border: 1px solid #5a2020; color: #ff6644; padding: 8px 20px; cursor: pointer; font-family: 'Courier New', monospace; font-size: 0.8rem; letter-spacing: 1px; transition: all .15s; }
+.undock-btn:hover { background: #2a1010; border-color: #ff4422; color: #ff8866; }
+.tab-content { flex: 1; overflow-y: auto; padding-top: 12px; scrollbar-width: thin; scrollbar-color: #1a3a5a #000014; }
+.trade-panel { display: flex; flex-direction: column; gap: 12px; }
+.trade-grid { border: 1px solid #1a3a5a; background: #020a14; }
+.trade-header-row, .trade-row { display: grid; grid-template-columns: 140px 90px 130px 90px 70px 150px; align-items: center; padding: 8px 12px; gap: 8px; }
+.trade-header-row { background: #0a1e30; color: #446688; font-size: 0.7rem; letter-spacing: 1px; border-bottom: 1px solid #1a3a5a; }
+.trade-row { border-bottom: 1px solid #0a1e2a; font-size: 0.85rem; }
+.trade-row:hover { background: #050f1a; }
+.commodity-name { font-weight: bold; }
+.price-buy { color: #ff8844; }
+.price-sell { color: #44cc88; }
+.profit-pos { color: #44ff88; font-size: 0.75rem; }
+.profit-neg { color: #ff4444; font-size: 0.75rem; }
+.cargo-amount { color: #88aacc; }
+.qty-input { background: #0a1e30; border: 1px solid #1a3a5a; color: #88ccff; padding: 4px 6px; width: 55px; font-family: 'Courier New', monospace; font-size: 0.8rem; text-align: center; }
+.action-btns { display: flex; gap: 6px; }
+.buy-btn, .sell-btn { padding: 4px 10px; font-family: 'Courier New', monospace; font-size: 0.75rem; cursor: pointer; border: 1px solid; transition: all .12s; letter-spacing: 0.5px; }
+.buy-btn { background: #0a1a0a; border-color: #226622; color: #44cc66; }
+.buy-btn:hover:not(:disabled) { background: #112211; border-color: #44cc66; }
+.sell-btn { background: #1a0a0a; border-color: #662222; color: #cc4444; }
+.sell-btn:hover:not(:disabled) { background: #211111; border-color: #cc4444; }
+button:disabled { opacity: 0.35; cursor: not-allowed; }
+.trade-tip { font-size: 0.75rem; color: #334455; padding: 8px; border: 1px dashed #1a3a5a; text-align: center; }
+.missions-panel { display: flex; flex-direction: column; gap: 16px; }
+.missions-header { display: flex; justify-content: space-between; align-items: center; }
+.missions-header h2, .active-missions h2 { font-size: 1rem; color: #88aacc; letter-spacing: 1px; }
+.active-count { color: #ffaa44; font-size: 0.85rem; }
+.mission-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.mission-card { background: #020a14; border: 1px solid #1a3a5a; padding: 14px; display: flex; flex-direction: column; gap: 8px; transition: border-color .15s; }
+.mission-card:hover { border-color: #2a5a88; }
+.mission-card.active { border-color: #1a5a2a; background: #020f06; }
+.mission-top { display: flex; justify-content: space-between; align-items: center; }
+.mission-type-badge { font-size: 0.7rem; padding: 2px 8px; letter-spacing: 1px; border: 1px solid; }
+.mission-type-badge.delivery { color: #44aaff; border-color: #1a4488; background: #020a1a; }
+.mission-type-badge.combat { color: #ff4444; border-color: #881a1a; background: #1a0202; }
+.mission-type-badge.exploration { color: #44ff88; border-color: #1a8844; background: #021a0a; }
+.mission-reward { color: #ffdd44; font-size: 0.8rem; }
+.mission-title { color: #88ccff; font-size: 0.95rem; font-weight: bold; }
+.mission-desc { color: #446688; font-size: 0.8rem; line-height: 1.4; }
+.accept-btn { background: #0a1e10; border: 1px solid #226633; color: #44cc77; padding: 7px 14px; cursor: pointer; font-family: 'Courier New', monospace; font-size: 0.8rem; letter-spacing: 1px; margin-top: 4px; transition: all .12s; align-self: flex-start; }
+.accept-btn:hover:not(:disabled) { background: #112211; border-color: #44cc77; }
+.progress-bar-wrap { background: #0a1e10; border: 1px solid #226633; border-radius: 2px; height: 14px; position: relative; overflow: hidden; }
+.progress-bar { background: #44cc77; height: 100%; }
+.progress-bar-wrap span { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; color: #fff; }
+.active-missions { border-top: 1px solid #1a3a5a; padding-top: 12px; }
+.empty-state { color: #334455; text-align: center; padding: 40px; border: 1px dashed #1a3a5a; }
+.upgrades-panel { display: flex; flex-direction: column; gap: 16px; }
+.upgrades-panel h2 { font-size: 1rem; color: #88aacc; letter-spacing: 1px; }
+.ship-stats-panel { background: #020a14; border: 1px solid #1a3a5a; padding: 14px; }
+.ship-stats-panel h3 { color: #00ccff; font-size: 0.9rem; margin-bottom: 12px; letter-spacing: 1px; }
+.stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.stat-bar-row { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; }
+.stat-label { width: 70px; color: #556677; flex-shrink: 0; }
+.stat-bar-bg { flex: 1; height: 8px; background: #0a1e30; border: 1px solid #1a3a5a; }
+.stat-bar-fill { height: 100%; }
+.stat-value { width: 50px; text-align: right; font-size: 0.75rem; }
+.upgrade-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.upgrade-card { background: #020a14; border: 1px solid #1a3a5a; padding: 14px; display: flex; flex-direction: column; gap: 8px; transition: border-color .15s; }
+.upgrade-card:hover { border-color: #2a5a88; }
+.upgrade-card.unaffordable { opacity: 0.5; }
+.upgrade-top { display: flex; justify-content: space-between; align-items: center; }
+.upgrade-name { color: #88ccff; font-weight: bold; font-size: 0.9rem; }
+.upgrade-cost { color: #ffdd44; font-size: 0.85rem; }
+.upgrade-desc { color: #446688; font-size: 0.8rem; }
+.upgrade-btn { background: #0a1e30; border: 1px solid #1a5a88; color: #00aaff; padding: 7px 14px; cursor: pointer; font-family: 'Courier New', monospace; font-size: 0.75rem; letter-spacing: 1px; transition: all .12s; align-self: flex-start; }
+.upgrade-btn:hover:not(:disabled) { background: #0f2540; border-color: #00aaff; }
+.shipyard-panel { display: flex; flex-direction: column; gap: 16px; }
+.shipyard-panel h2 { font-size: 1rem; color: #88aacc; letter-spacing: 1px; }
+.shipyard-note { color: #446688; font-size: 0.8rem; padding: 8px; border: 1px dashed #1a3a5a; }
+.ship-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.ship-card { background: #020a14; border: 1px solid #1a3a5a; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
+.ship-card.current { border-color: #00aaff; background: #021220; }
+.ship-card.unaffordable { opacity: 0.5; }
+.ship-top { display: flex; justify-content: space-between; align-items: center; }
+.ship-name { color: #00ccff; font-size: 1.1rem; font-weight: bold; letter-spacing: 1px; }
+.current-badge { background: #003355; border: 1px solid #0077bb; color: #00aaff; padding: 2px 10px; font-size: 0.7rem; letter-spacing: 1px; }
+.ship-cost { color: #ffdd44; font-size: 0.9rem; }
+.ship-specs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.spec { display: flex; justify-content: space-between; font-size: 0.8rem; }
+.spec label { color: #446688; }
+.spec span { color: #88ccff; }
+.buy-ship-btn { background: #0a1e10; border: 1px solid #226633; color: #44cc77; padding: 8px 16px; cursor: pointer; font-family: 'Courier New', monospace; font-size: 0.8rem; letter-spacing: 1px; transition: all .12s; }
+.buy-ship-btn:hover:not(:disabled) { background: #112211; border-color: #44cc77; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #000014; }
+::-webkit-scrollbar-thumb { background: #1a3a5a; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="game-container">
+  <div class="error-banner" id="errorBanner"></div>
+  <canvas id="gameCanvas" class="game-canvas" width="1920" height="1080"></canvas>
+  <div class="station-overlay" id="stationOverlay"><div class="station-ui" id="stationUI"></div></div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   STAR WANDERER — single-file vanilla JS / Canvas port
+   No build step. No npm. Open this file directly in any browser, or host
+   it on GitHub Pages. Edit in Notepad++, refresh browser to test.
+   ========================================================================= */
+
+function showError(msg) {
+  var b = document.getElementById("errorBanner");
+  b.textContent = "Error: " + msg + " (check console for details)";
+  b.style.display = "block";
+  console.error(msg);
+}
+window.addEventListener("error", function (e) { showError(e.message); });
+
+/* ---------------- DATA (ported from data.ts) ---------------- */
+
+var COMMODITIES = [
+  { id: "food", name: "Food", basePrice: 10, color: "#88ff88" },
+  { id: "ore", name: "Ore", basePrice: 25, color: "#ffaa44" },
+  { id: "technology", name: "Technology", basePrice: 100, color: "#44aaff" },
+  { id: "fuel", name: "Fuel", basePrice: 50, color: "#ff8844" },
+  { id: "weapons", name: "Weapons", basePrice: 200, color: "#ff4444" },
+  { id: "medical", name: "Medical Supplies", basePrice: 80, color: "#ff88ff" }
+];
+
+var SHIP_STATS = {
+  scout: { type: "scout", name: "Scout", speed: 5.0, maxShield: 50, maxHull: 60, cargoCapacity: 20, fireRate: 12, bulletDamage: 10, cost: 0 },
+  freighter: { type: "freighter", name: "Freighter", speed: 2.5, maxShield: 30, maxHull: 80, cargoCapacity: 100, fireRate: 20, bulletDamage: 8, cost: 5000 },
+  fighter: { type: "fighter", name: "Fighter", speed: 4.5, maxShield: 120, maxHull: 80, cargoCapacity: 15, fireRate: 6, bulletDamage: 18, cost: 8000 }
+};
+
+var UPGRADES = [
+  { id: "speed_boost", name: "Speed Booster", description: "Increases ship speed by 0.5", stat: "speed", delta: 0.5, cost: 1500 },
+  { id: "shield_cell", name: "Shield Cell", description: "Adds 25 max shield", stat: "maxShield", delta: 25, cost: 1200 },
+  { id: "hull_plating", name: "Hull Plating", description: "Adds 30 max hull", stat: "maxHull", delta: 30, cost: 1000 },
+  { id: "cargo_rack", name: "Cargo Rack", description: "Adds 20 cargo capacity", stat: "cargoCapacity", delta: 20, cost: 800 },
+  { id: "fire_control", name: "Fire Control", description: "Reduces fire cooldown by 2", stat: "fireRate", delta: -2, cost: 2000 },
+  { id: "damage_amp", name: "Damage Amplifier", description: "Adds 5 bullet damage", stat: "bulletDamage", delta: 5, cost: 2500 }
+];
+
+var DELIVERY_ITEMS = ["Data Crystals", "Medical Nanites", "Fuel Cells", "Rare Ore Samples", "Diplomatic Parcel", "Engine Components"];
+var PIRATE_NAMES = ["Marauder", "Corsair", "Raider", "Buccaneer", "Scourge", "Vandal", "Reaver"];
+var XP_TABLE = [0, 200, 500, 1000, 1800, 3000, 4800, 7500, 11000, 16000, 22000];
+var missionIdCounter = 1;
+
+function getXpForNextLevel(level) {
+  var v = XP_TABLE[Math.min(level, XP_TABLE.length - 1)];
+  return v === undefined ? 99999 : v;
+}
+
+function genStars(count) {
+  var arr = [];
+  for (var i = 0; i < count; i++) {
+    arr.push({ x: Math.random() * 2400, y: Math.random() * 1800, brightness: 0.3 + Math.random() * 0.7 });
+  }
+  return arr;
+}
+
+function buildInitialSystems() {
+  var systems = {
+    sol: {
+      id: "sol", name: "Sol", mapX: 320, mapY: 260, color: "#ffdd44", starRadius: 30,
+      pirateSpawnRate: 0.003, stars: genStars(120), enemies: [],
+      stations: [
+        { id: "earth_station", name: "Earth Station", systemId: "sol", x: 800, y: 300,
+          prices: { food: 8, ore: 30, technology: 90, fuel: 55, weapons: 210, medical: 75 },
+          supply: { food: 80, ore: 40, technology: 60, fuel: 70, weapons: 30, medical: 50 },
+          demand: { food: 50, ore: 70, technology: 80, fuel: 60, weapons: 65, medical: 70 },
+          missions: [], lastPriceUpdate: 0 },
+        { id: "lunar_base", name: "Lunar Base", systemId: "sol", x: 1400, y: 600,
+          prices: { food: 12, ore: 22, technology: 110, fuel: 45, weapons: 195, medical: 85 },
+          supply: { food: 40, ore: 80, technology: 40, fuel: 80, weapons: 50, medical: 40 },
+          demand: { food: 70, ore: 40, technology: 70, fuel: 50, weapons: 60, medical: 75 },
+          missions: [], lastPriceUpdate: 0 }
+      ],
+      gates: [
+        { id: "sol_to_alpha", x: 200, y: 900, targetSystemId: "alpha_centauri", targetGateId: "alpha_to_sol" },
+        { id: "sol_to_vega", x: 1800, y: 200, targetSystemId: "vega", targetGateId: "vega_to_sol" }
+      ]
+    },
+    alpha_centauri: {
+      id: "alpha_centauri", name: "Alpha Centauri", mapX: 140, mapY: 420, color: "#ff9944", starRadius: 24,
+      pirateSpawnRate: 0.005, stars: genStars(110), enemies: [],
+      stations: [
+        { id: "proxima_outpost", name: "Proxima Outpost", systemId: "alpha_centauri", x: 700, y: 400,
+          prices: { food: 15, ore: 18, technology: 120, fuel: 40, weapons: 180, medical: 90 },
+          supply: { food: 30, ore: 90, technology: 30, fuel: 85, weapons: 45, medical: 35 },
+          demand: { food: 80, ore: 30, technology: 85, fuel: 45, weapons: 70, medical: 80 },
+          missions: [], lastPriceUpdate: 0 }
+      ],
+      gates: [
+        { id: "alpha_to_sol", x: 1600, y: 800, targetSystemId: "sol", targetGateId: "sol_to_alpha" },
+        { id: "alpha_to_sirius", x: 300, y: 200, targetSystemId: "sirius", targetGateId: "sirius_to_alpha" }
+      ]
+    },
+    vega: {
+      id: "vega", name: "Vega", mapX: 530, mapY: 120, color: "#aaddff", starRadius: 28,
+      pirateSpawnRate: 0.004, stars: genStars(130), enemies: [],
+      stations: [
+        { id: "vega_prime", name: "Vega Prime", systemId: "vega", x: 900, y: 500,
+          prices: { food: 20, ore: 35, technology: 80, fuel: 60, weapons: 230, medical: 65 },
+          supply: { food: 55, ore: 55, technology: 80, fuel: 50, weapons: 25, medical: 60 },
+          demand: { food: 60, ore: 65, technology: 60, fuel: 65, weapons: 75, medical: 65 },
+          missions: [], lastPriceUpdate: 0 }
+      ],
+      gates: [
+        { id: "vega_to_sol", x: 400, y: 700, targetSystemId: "sol", targetGateId: "sol_to_vega" },
+        { id: "vega_to_tau", x: 1500, y: 300, targetSystemId: "tau_ceti", targetGateId: "tau_to_vega" }
+      ]
+    },
+    sirius: {
+      id: "sirius", name: "Sirius", mapX: 180, mapY: 180, color: "#ffffff", starRadius: 32,
+      pirateSpawnRate: 0.007, stars: genStars(100), enemies: [],
+      stations: [
+        { id: "sirius_station", name: "Sirius Citadel", systemId: "sirius", x: 1100, y: 400,
+          prices: { food: 18, ore: 28, technology: 95, fuel: 70, weapons: 160, medical: 100 },
+          supply: { food: 50, ore: 60, technology: 70, fuel: 40, weapons: 60, medical: 30 },
+          demand: { food: 65, ore: 55, technology: 75, fuel: 70, weapons: 55, medical: 85 },
+          missions: [], lastPriceUpdate: 0 }
+      ],
+      gates: [
+        { id: "sirius_to_alpha", x: 1700, y: 600, targetSystemId: "alpha_centauri", targetGateId: "alpha_to_sirius" },
+        { id: "sirius_to_proxima", x: 350, y: 850, targetSystemId: "proxima", targetGateId: "proxima_to_sirius" }
+      ]
+    },
+    tau_ceti: {
+      id: "tau_ceti", name: "Tau Ceti", mapX: 640, mapY: 280, color: "#ffcc88", starRadius: 22,
+      pirateSpawnRate: 0.006, stars: genStars(90), enemies: [],
+      stations: [
+        { id: "tau_outpost", name: "Tau Outpost", systemId: "tau_ceti", x: 600, y: 600,
+          prices: { food: 25, ore: 20, technology: 85, fuel: 65, weapons: 175, medical: 70 },
+          supply: { food: 35, ore: 75, technology: 55, fuel: 60, weapons: 40, medical: 55 },
+          demand: { food: 75, ore: 45, technology: 72, fuel: 55, weapons: 68, medical: 72 },
+          missions: [], lastPriceUpdate: 0 }
+      ],
+      gates: [
+        { id: "tau_to_vega", x: 1200, y: 300, targetSystemId: "vega", targetGateId: "vega_to_tau" },
+        { id: "tau_to_proxima", x: 800, y: 800, targetSystemId: "proxima", targetGateId: "proxima_to_tau" }
+      ]
+    },
+    proxima: {
+      id: "proxima", name: "Proxima", mapX: 430, mapY: 400, color: "#ff6644", starRadius: 18,
+      pirateSpawnRate: 0.009, stars: genStars(80), enemies: [],
+      stations: [
+        { id: "proxima_haven", name: "Proxima Haven", systemId: "proxima", x: 1000, y: 500,
+          prices: { food: 30, ore: 15, technology: 140, fuel: 35, weapons: 145, medical: 110 },
+          supply: { food: 20, ore: 95, technology: 25, fuel: 90, weapons: 70, medical: 20 },
+          demand: { food: 90, ore: 25, technology: 90, fuel: 35, weapons: 50, medical: 90 },
+          missions: [], lastPriceUpdate: 0 }
+      ],
+      gates: [
+        { id: "proxima_to_sirius", x: 1600, y: 200, targetSystemId: "sirius", targetGateId: "sirius_to_proxima" },
+        { id: "proxima_to_tau", x: 400, y: 800, targetSystemId: "tau_ceti", targetGateId: "tau_to_proxima" }
+      ]
+    }
+  };
+  return systems;
+}
+
+function generateMissions(stationId, systems) {
+  var systemIds = Object.keys(systems).filter(function (s) { return s !== "sol"; });
+  var missions = [];
+  for (var i = 0; i < 3; i++) {
+    var rand = Math.random();
+    var id = "mission_" + (missionIdCounter++) + "_" + stationId;
+    if (rand < 0.4) {
+      var targetSysId = systemIds[Math.floor(Math.random() * systemIds.length)];
+      var targetSys = systems[targetSysId];
+      var targetStation = targetSys.stations[Math.floor(Math.random() * targetSys.stations.length)];
+      var item = DELIVERY_ITEMS[Math.floor(Math.random() * DELIVERY_ITEMS.length)];
+      missions.push({
+        id: id, type: "delivery", title: "Delivery to " + targetStation.name,
+        description: "Transport " + item + " to " + targetStation.name + " in the " + targetSys.name + " system.",
+        reward: 800 + Math.floor(Math.random() * 1200), xpReward: 80 + Math.floor(Math.random() * 120),
+        targetSystemId: targetSysId, targetStationId: targetStation.id, cargoItem: item,
+        accepted: false, complete: false
+      });
+    } else if (rand < 0.7) {
+      var killsRequired = 3 + Math.floor(Math.random() * 5);
+      missions.push({
+        id: id, type: "combat", title: "Eliminate Pirate Squadron",
+        description: "Destroy " + killsRequired + " pirate ships in this system.",
+        reward: 600 + killsRequired * 200, xpReward: 60 + killsRequired * 30,
+        targetSystemId: null, killsRequired: killsRequired, killCount: 0,
+        accepted: false, complete: false
+      });
+    } else {
+      var targetSysId2 = systemIds[Math.floor(Math.random() * systemIds.length)];
+      var targetSys2 = systems[targetSysId2];
+      missions.push({
+        id: id, type: "exploration", title: "Survey " + targetSys2.name,
+        description: "Travel to the " + targetSys2.name + " system and return with survey data.",
+        reward: 500 + Math.floor(Math.random() * 800), xpReward: 100 + Math.floor(Math.random() * 100),
+        targetSystemId: targetSysId2, accepted: false, complete: false
+      });
+    }
+  }
+  return missions;
+}
+
+/* ---------------- GAME ENGINE (ported from GameEngine.ts) ---------------- */
+
+var WIDTH = 1920, HEIGHT = 1080;
+var STATION_DOCK_RADIUS = 70, GATE_TRAVEL_RADIUS = 80;
+var BULLET_SPEED = 12, BULLET_LIFE = 60, ENEMY_BULLET_SPEED = 8;
+
+function GameEngine(onStateChange) {
+  this.onStateChange = onStateChange;
+  this.canvas = null;
+  this.ctx = null;
+  this.animFrameId = 0;
+  this.resetState();
+}
+
+GameEngine.prototype.resetState = function () {
+  var systems = buildInitialSystems();
+  Object.keys(systems).forEach(function (k) {
+    systems[k].stations.forEach(function (st) { st.missions = generateMissions(st.id, systems); });
+  });
+  var scout = SHIP_STATS.scout;
+  this.state = {
+    screen: "title",
+    player: {
+      x: WIDTH / 2, y: HEIGHT / 2, vx: 0, vy: 0, angle: 0,
+      hp: scout.maxHull, maxHp: scout.maxHull, shield: scout.maxShield, maxShield: scout.maxShield,
+      cargoCapacity: scout.cargoCapacity, cargo: [], credits: 1000, xp: 0, level: 1,
+      currentSystemId: "sol", shipStats: Object.assign({}, scout), activeMissions: [], skills: {},
+      totalKills: 0, systemsVisited: new Set(["sol"]), dockedStationId: null,
+      shieldRegenCooldown: 0, shootCooldown: 0, invincibleTime: 0
+    },
+    systems: systems, bullets: [], particles: [], keys: {}, mouseX: 0, mouseY: 0, mouseDown: false,
+    tick: 0, combatLog: [], notification: null, selectedStationId: null, stationTab: "trade",
+    mapSelectedSystem: null, enemyIdCounter: 0
+  };
+};
+
+GameEngine.prototype.mount = function (canvas) {
+  this.canvas = canvas;
+  this.ctx = canvas.getContext("2d");
+  this.loop();
+};
+
+GameEngine.prototype.unmount = function () { cancelAnimationFrame(this.animFrameId); };
+
+GameEngine.prototype.loop = function () {
+  var self = this;
+  this.update();
+  this.render();
+  this.animFrameId = requestAnimationFrame(function () { self.loop(); });
+};
+
+GameEngine.prototype.addLog = function (msg) {
+  this.state.combatLog = [msg].concat(this.state.combatLog).slice(0, 8);
+};
+GameEngine.prototype.notify = function (text) { this.state.notification = { text: text, ttl: 180 }; };
+
+GameEngine.prototype.spawnParticles = function (x, y, color, count, speed) {
+  for (var i = 0; i < count; i++) {
+    var angle = Math.random() * Math.PI * 2;
+    var spd = speed * (0.5 + Math.random() * 0.5);
+    this.state.particles.push({ x: x, y: y, vx: Math.cos(angle) * spd, vy: Math.sin(angle) * spd, life: 30 + Math.random() * 30, maxLife: 60, color: color, size: 2 + Math.random() * 3 });
+  }
+};
+
+GameEngine.prototype.spawnEnemy = function (system) {
+  var id = ++this.state.enemyIdCounter;
+  var edge = Math.floor(Math.random() * 4);
+  var x = 0, y = 0;
+  if (edge === 0) { x = Math.random() * WIDTH; y = -60; }
+  else if (edge === 1) { x = WIDTH + 60; y = Math.random() * HEIGHT; }
+  else if (edge === 2) { x = Math.random() * WIDTH; y = HEIGHT + 60; }
+  else { x = -60; y = Math.random() * HEIGHT; }
+  var tier = Math.floor(Math.random() * 3);
+  var name = PIRATE_NAMES[Math.floor(Math.random() * PIRATE_NAMES.length)];
+  var hp = 30 + tier * 30;
+  system.enemies.push({
+    id: id, x: x, y: y, vx: 0, vy: 0, angle: Math.random() * Math.PI * 2,
+    hp: hp, maxHp: hp, shield: tier * 20, maxShield: tier * 20, speed: 1.5 + tier * 0.5,
+    state: "patrol", patrolAngle: Math.random() * Math.PI * 2, shootCooldown: 60 + Math.random() * 60,
+    xpReward: 50 + tier * 50, creditReward: 100 + tier * 200, name: name
+  });
+};
+
+GameEngine.prototype.giveXp = function (amount) {
+  var p = this.state.player;
+  p.xp += amount;
+  var needed = getXpForNextLevel(p.level);
+  if (p.xp >= needed && p.level < XP_TABLE.length - 1) {
+    p.level++;
+    p.hp = Math.min(p.hp + 20, p.maxHp);
+    p.shield = p.maxShield;
+    this.notify("Level Up! You are now level " + p.level);
+    this.addLog("Level Up to " + p.level + "!");
+  }
+};
+
+GameEngine.prototype.updatePlayer = function () {
+  var p = this.state.player;
+  if (p.dockedStationId) return;
+  var keys = this.state.keys;
+  var spd = p.shipStats.speed;
+  var dx = 0, dy = 0;
+  if (keys["w"] || keys["W"] || keys["ArrowUp"]) dy -= 1;
+  if (keys["s"] || keys["S"] || keys["ArrowDown"]) dy += 1;
+  if (keys["a"] || keys["A"] || keys["ArrowLeft"]) dx -= 1;
+  if (keys["d"] || keys["D"] || keys["ArrowRight"]) dx += 1;
+  if (dx !== 0 && dy !== 0) { dx *= 0.707; dy *= 0.707; }
+
+  var friction = 0.88;
+  p.vx = (p.vx + dx * spd * 0.3) * friction;
+  p.vy = (p.vy + dy * spd * 0.3) * friction;
+
+  var maxSpd = spd;
+  var curSpd = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+  if (curSpd > maxSpd) { p.vx = (p.vx / curSpd) * maxSpd; p.vy = (p.vy / curSpd) * maxSpd; }
+
+  p.x += p.vx; p.y += p.vy;
+  p.x = Math.max(30, Math.min(WIDTH - 30, p.x));
+  p.y = Math.max(30, Math.min(HEIGHT - 30, p.y));
+
+  if (dx !== 0 || dy !== 0) p.angle = Math.atan2(dy, dx) + Math.PI / 2;
+
+  if (p.invincibleTime > 0) p.invincibleTime--;
+  if (p.shieldRegenCooldown > 0) p.shieldRegenCooldown--;
+  if (p.shieldRegenCooldown <= 0 && p.shield < p.maxShield) p.shield = Math.min(p.maxShield, p.shield + 0.15);
+
+  if (p.shootCooldown > 0) p.shootCooldown--;
+  if (this.state.mouseDown && p.shootCooldown <= 0 && this.canvas) {
+    p.shootCooldown = p.shipStats.fireRate;
+    var rect = this.canvas.getBoundingClientRect();
+    var scaleX = WIDTH / rect.width, scaleY = HEIGHT / rect.height;
+    var mx = this.state.mouseX * scaleX, my = this.state.mouseY * scaleY;
+    var tx = mx - p.x, ty = my - p.y;
+    var dist = Math.sqrt(tx * tx + ty * ty);
+    if (dist > 1) {
+      this.state.bullets.push({ x: p.x, y: p.y, vx: (tx / dist) * BULLET_SPEED, vy: (ty / dist) * BULLET_SPEED, life: BULLET_LIFE, fromPlayer: true });
+    }
+  }
+
+  var sys = this.state.systems[p.currentSystemId];
+  if (!sys) return;
+
+  for (var i = 0; i < sys.stations.length; i++) {
+    var station = sys.stations[i];
+    var sdx = p.x - station.x, sdy = p.y - station.y;
+    if (Math.sqrt(sdx * sdx + sdy * sdy) < STATION_DOCK_RADIUS) { this.dockAtStation(station.id); return; }
+  }
+
+  if (this.state.screen === "space") {
+    for (var g = 0; g < sys.gates.length; g++) {
+      var gate = sys.gates[g];
+      var gdx = p.x - gate.x, gdy = p.y - gate.y;
+      if (Math.sqrt(gdx * gdx + gdy * gdy) < GATE_TRAVEL_RADIUS) { this.travelThroughGate(gate.targetSystemId, gate.targetGateId); return; }
+    }
+  }
+};
+
+GameEngine.prototype.dockAtStation = function (stationId) {
+  var p = this.state.player;
+  p.dockedStationId = stationId; p.vx = 0; p.vy = 0;
+  this.state.selectedStationId = stationId;
+  this.state.stationTab = "trade";
+  this.state.screen = "station";
+  this.onStateChange();
+  this.notify("Docked at station");
+
+  for (var i = 0; i < p.activeMissions.length; i++) {
+    var mission = p.activeMissions[i];
+    if (mission.type === "delivery" && mission.targetStationId === stationId && !mission.complete) {
+      mission.complete = true;
+      p.credits += mission.reward;
+      this.giveXp(mission.xpReward);
+      this.notify("Mission complete: " + mission.title + " (+" + mission.reward + " credits)");
+      this.addLog("Mission complete: +" + mission.reward + " CR");
+    }
+  }
+  p.activeMissions = p.activeMissions.filter(function (m) { return !m.complete; });
+
+  var sys = this.state.systems[p.currentSystemId];
+  var self = this;
+  sys.stations.forEach(function (st) {
+    if (st.id === stationId) {
+      if (self.state.tick - st.lastPriceUpdate > 600) { self.updateStationPrices(st); st.lastPriceUpdate = self.state.tick; }
+      st.missions = generateMissions(st.id, self.state.systems);
+    }
+  });
+};
+
+GameEngine.prototype.travelThroughGate = function (targetSysId, targetGateId) {
+  var p = this.state.player;
+  var targetSys = this.state.systems[targetSysId];
+  if (!targetSys) return;
+  var targetGate = targetSys.gates.find(function (g) { return g.id === targetGateId; });
+  if (!targetGate) return;
+  p.currentSystemId = targetSysId;
+  p.x = targetGate.x + 120 * Math.cos(Math.random() * Math.PI * 2);
+  p.y = targetGate.y + 120 * Math.sin(Math.random() * Math.PI * 2);
+  p.vx = 0; p.vy = 0;
+  p.systemsVisited.add(targetSysId);
+  this.spawnParticles(p.x, p.y, "#00ffff", 30, 4);
+  this.notify("Arrived in " + targetSys.name);
+
+  for (var i = 0; i < p.activeMissions.length; i++) {
+    var mission = p.activeMissions[i];
+    if (mission.type === "exploration" && mission.targetSystemId === targetSysId && !mission.complete) {
+      mission.complete = true;
+      p.credits += mission.reward;
+      this.giveXp(mission.xpReward);
+      this.notify("Mission complete: " + mission.title + " (+" + mission.reward + " credits)");
+    }
+  }
+  p.activeMissions = p.activeMissions.filter(function (m) { return !m.complete; });
+  this.onStateChange();
+};
+
+GameEngine.prototype.updateStationPrices = function (st) {
+  Object.keys(st.prices).forEach(function (key) {
+    st.supply[key] = Math.max(5, Math.min(100, (st.supply[key] || 50) + Math.floor(Math.random() * 20) - 10));
+    st.demand[key] = Math.max(5, Math.min(100, (st.demand[key] || 50) + Math.floor(Math.random() * 20) - 10));
+  });
+};
+
+GameEngine.prototype.updateEnemies = function () {
+  var p = this.state.player;
+  if (p.dockedStationId) return;
+  var sys = this.state.systems[p.currentSystemId];
+  if (!sys) return;
+
+  if (Math.random() < sys.pirateSpawnRate && sys.enemies.length < 6) this.spawnEnemy(sys);
+
+  for (var i = sys.enemies.length - 1; i >= 0; i--) {
+    var e = sys.enemies[i];
+    var ddx = p.x - e.x, ddy = p.y - e.y;
+    var dist = Math.sqrt(ddx * ddx + ddy * ddy);
+
+    if (dist < 400) e.state = "chase"; else if (dist > 700) e.state = "patrol";
+
+    if (e.state === "chase") {
+      e.angle = Math.atan2(ddy, ddx);
+      e.vx += Math.cos(e.angle) * 0.15; e.vy += Math.sin(e.angle) * 0.15;
+    } else {
+      e.patrolAngle += 0.01;
+      e.vx += Math.cos(e.patrolAngle) * 0.05; e.vy += Math.sin(e.patrolAngle) * 0.05;
+    }
+
+    var eSpd = Math.sqrt(e.vx * e.vx + e.vy * e.vy);
+    if (eSpd > e.speed) { e.vx = (e.vx / eSpd) * e.speed; e.vy = (e.vy / eSpd) * e.speed; }
+
+    e.x += e.vx; e.y += e.vy;
+    e.x = Math.max(-100, Math.min(WIDTH + 100, e.x));
+    e.y = Math.max(-100, Math.min(HEIGHT + 100, e.y));
+
+    if (e.state === "chase") {
+      e.shootCooldown--;
+      if (e.shootCooldown <= 0 && dist < 350) {
+        e.shootCooldown = 80 + Math.floor(Math.random() * 40);
+        var ang = Math.atan2(ddy, ddx);
+        this.state.bullets.push({ x: e.x, y: e.y, vx: Math.cos(ang) * ENEMY_BULLET_SPEED, vy: Math.sin(ang) * ENEMY_BULLET_SPEED, life: 50, fromPlayer: false });
+      }
+    }
+    if (e.shield > 0) e.shield = Math.min(e.maxShield, e.shield + 0.05);
+  }
+};
+
+GameEngine.prototype.updateBullets = function () {
+  var p = this.state.player;
+  var sys = this.state.systems[p.currentSystemId];
+
+  for (var i = this.state.bullets.length - 1; i >= 0; i--) {
+    var b = this.state.bullets[i];
+    b.x += b.vx; b.y += b.vy; b.life--;
+    if (b.life <= 0 || b.x < -50 || b.x > WIDTH + 50 || b.y < -50 || b.y > HEIGHT + 50) { this.state.bullets.splice(i, 1); continue; }
+
+    if (b.fromPlayer && sys) {
+      for (var j = sys.enemies.length - 1; j >= 0; j--) {
+        var e = sys.enemies[j];
+        var dx = b.x - e.x, dy = b.y - e.y;
+        if (Math.sqrt(dx * dx + dy * dy) < 18) {
+          this.state.bullets.splice(i, 1);
+          this.spawnParticles(e.x, e.y, "#ff6600", 5, 3);
+          var dmg = p.shipStats.bulletDamage;
+          if (e.shield > 0) { var shDmg = Math.min(e.shield, dmg); e.shield -= shDmg; dmg -= shDmg; }
+          e.hp -= dmg;
+          if (e.hp <= 0) {
+            this.spawnParticles(e.x, e.y, "#ff4400", 25, 6);
+            this.spawnParticles(e.x, e.y, "#ffaa00", 15, 4);
+            p.credits += e.creditReward; p.totalKills++;
+            this.giveXp(e.xpReward);
+            this.addLog("Destroyed " + e.name + "! +" + e.creditReward + " CR");
+            for (var m = 0; m < p.activeMissions.length; m++) {
+              var mis = p.activeMissions[m];
+              if (mis.type === "combat" && !mis.complete && mis.killsRequired) {
+                mis.killCount = (mis.killCount || 0) + 1;
+                if (mis.killCount >= mis.killsRequired) {
+                  mis.complete = true;
+                  p.credits += mis.reward;
+                  this.giveXp(mis.xpReward);
+                  this.notify("Mission complete: " + mis.title + " (+" + mis.reward + " credits)");
+                }
+              }
+            }
+            p.activeMissions = p.activeMissions.filter(function (mm) { return !mm.complete; });
+            sys.enemies.splice(j, 1);
+          }
+          break;
+        }
+      }
+    }
+
+    if (!b.fromPlayer && p.invincibleTime <= 0) {
+      var pdx = b.x - p.x, pdy = b.y - p.y;
+      if (Math.sqrt(pdx * pdx + pdy * pdy) < 16) {
+        this.state.bullets.splice(i, 1);
+        this.spawnParticles(p.x, p.y, "#ff0000", 8, 4);
+        p.invincibleTime = 20; p.shieldRegenCooldown = 180;
+        var pdmg = 8 + Math.random() * 5;
+        if (p.shield > 0) { var pshDmg = Math.min(p.shield, pdmg); p.shield -= pshDmg; p.hp -= (pdmg - pshDmg); }
+        else { p.hp -= pdmg; }
+        this.addLog("Hull hit! -" + pdmg.toFixed(0) + " HP");
+        if (p.hp <= 0) { p.hp = 0; this.state.screen = "gameover"; this.onStateChange(); }
+      }
+    }
+  }
+};
+
+GameEngine.prototype.updateParticles = function () {
+  for (var i = this.state.particles.length - 1; i >= 0; i--) {
+    var pt = this.state.particles[i];
+    pt.x += pt.vx; pt.y += pt.vy; pt.vx *= 0.95; pt.vy *= 0.95; pt.life--;
+    if (pt.life <= 0) this.state.particles.splice(i, 1);
+  }
+};
+
+GameEngine.prototype.update = function () {
+  if (this.state.screen !== "space" && this.state.screen !== "starmap") return;
+  this.state.tick++;
+  if (this.state.notification && --this.state.notification.ttl <= 0) this.state.notification = null;
+  if (this.state.screen === "space") { this.updatePlayer(); this.updateEnemies(); this.updateBullets(); this.updateParticles(); }
+};
+
+/* ---- rendering ---- */
+
+GameEngine.prototype.render = function () {
+  var ctx = this.ctx, canvas = this.canvas;
+  if (!ctx || !canvas) return;
+  var screen = this.state.screen;
+  if (screen === "title") this.renderTitle(ctx, canvas);
+  else if (screen === "space") this.renderSpace(ctx);
+  else if (screen === "starmap") this.renderStarmap(ctx, canvas);
+  else if (screen === "gameover") this.renderGameOver(ctx, canvas);
+  else { ctx.fillStyle = "#000011"; ctx.fillRect(0, 0, WIDTH, HEIGHT); }
+};
+
+GameEngine.prototype.renderTitle = function (ctx, canvas) {
+  ctx.fillStyle = "#000011"; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  var systemsArr = Object.keys(this.state.systems).map(function (k) { return this.state.systems[k]; }, this);
+  systemsArr.forEach(function (sys) {
+    sys.stars.slice(0, 20).forEach(function (s) {
+      var b = Math.floor(s.brightness * 255);
+      ctx.fillStyle = "rgb(" + b + "," + b + "," + b + ")";
+      ctx.beginPath(); ctx.arc((s.x / 2400) * WIDTH, (s.y / 1800) * HEIGHT, 1.5, 0, Math.PI * 2); ctx.fill();
+    });
+  });
+  ctx.save();
+  ctx.shadowColor = "#00ffff"; ctx.shadowBlur = 30; ctx.fillStyle = "#00ffff";
+  ctx.font = "bold " + Math.floor(HEIGHT * 0.09) + "px Courier New";
+  ctx.textAlign = "center";
+  ctx.fillText("STAR WANDERER", WIDTH / 2, HEIGHT * 0.35);
+  ctx.restore();
+  ctx.fillStyle = "#88ccff"; ctx.font = Math.floor(HEIGHT * 0.025) + "px Courier New"; ctx.textAlign = "center";
+  ctx.fillText("A Solo Space Sandbox Adventure", WIDTH / 2, HEIGHT * 0.44);
+  ctx.fillStyle = "#00ff88"; ctx.font = Math.floor(HEIGHT * 0.028) + "px Courier New";
+  ctx.fillText("[ PRESS SPACE OR CLICK TO BEGIN ]", WIDTH / 2, HEIGHT * 0.58);
+  ctx.fillStyle = "#556677"; ctx.font = Math.floor(HEIGHT * 0.02) + "px Courier New";
+  ctx.fillText("WASD/Arrows: Move  |  Mouse: Aim & Fire  |  M: Star Map  |  Fly to station to dock", WIDTH / 2, HEIGHT * 0.92);
+};
+
+GameEngine.prototype.renderSpace = function (ctx) {
+  var sys = this.state.systems[this.state.player.currentSystemId];
+  if (!sys) return;
+  ctx.fillStyle = "#000008"; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+
+  sys.stars.forEach(function (s) {
+    var b = Math.floor(s.brightness * 200);
+    ctx.fillStyle = "rgb(" + b + "," + b + "," + (b + 20) + ")";
+    ctx.beginPath(); ctx.arc(s.x % WIDTH, s.y % HEIGHT, s.brightness > 0.8 ? 1.5 : 1, 0, Math.PI * 2); ctx.fill();
+  });
+
+  ctx.save();
+  ctx.shadowColor = sys.color; ctx.shadowBlur = 40; ctx.fillStyle = sys.color;
+  ctx.beginPath(); ctx.arc(WIDTH / 2, HEIGHT / 2, sys.starRadius, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+
+  var self = this;
+  sys.stations.forEach(function (st) { self.renderStation(ctx, st); });
+  sys.gates.forEach(function (gate) { self.renderGate(ctx, gate); });
+  this.renderParticles(ctx);
+  sys.enemies.forEach(function (e) { self.renderEnemy(ctx, e); });
+  this.renderBullets(ctx);
+  this.renderPlayerShip(ctx);
+  this.renderHUD(ctx, sys);
+};
+
+GameEngine.prototype.renderStation = function (ctx, st) {
+  ctx.save();
+  ctx.translate(st.x, st.y);
+  var angle = (this.state.tick * 0.005) % (Math.PI * 2);
+  ctx.rotate(angle);
+  ctx.strokeStyle = "#4488ff"; ctx.lineWidth = 2; ctx.shadowColor = "#4488ff"; ctx.shadowBlur = 10;
+  ctx.strokeRect(-22, -22, 44, 44);
+  ctx.strokeStyle = "#88aaff"; ctx.strokeRect(-10, -10, 20, 20);
+  ctx.restore();
+  ctx.fillStyle = "#88aaff"; ctx.font = "13px Courier New"; ctx.textAlign = "center";
+  ctx.fillText(st.name, st.x, st.y + 40);
+  ctx.fillStyle = "#44ff88"; ctx.font = "11px Courier New";
+  ctx.fillText("[DOCK]", st.x, st.y + 55);
+};
+
+GameEngine.prototype.renderGate = function (ctx, gate) {
+  var t = this.state.tick;
+  ctx.save();
+  ctx.translate(gate.x, gate.y); ctx.rotate(t * 0.02);
+  ctx.strokeStyle = "#ff8800"; ctx.lineWidth = 2; ctx.shadowColor = "#ff8800"; ctx.shadowBlur = 15;
+  for (var i = 0; i < 3; i++) {
+    ctx.save(); ctx.rotate((i / 3) * Math.PI * 2);
+    ctx.beginPath(); ctx.moveTo(0, 20); ctx.lineTo(10, 40); ctx.lineTo(-10, 40); ctx.closePath(); ctx.stroke();
+    ctx.restore();
+  }
+  ctx.restore();
+  var tSys = this.state.systems[gate.targetSystemId];
+  ctx.fillStyle = "#ffaa44"; ctx.font = "13px Courier New"; ctx.textAlign = "center";
+  ctx.fillText(tSys ? ("\u2192 " + tSys.name) : "Gate", gate.x, gate.y + 55);
+};
+
+GameEngine.prototype.renderPlayerShip = function (ctx) {
+  var p = this.state.player;
+  if (p.invincibleTime > 0 && Math.floor(p.invincibleTime / 3) % 2 === 0) return;
+  var s = 18;
+  ctx.save();
+  ctx.translate(p.x, p.y); ctx.rotate(p.angle);
+  ctx.shadowColor = "#00ffff"; ctx.shadowBlur = 12; ctx.fillStyle = "#00ffee";
+  ctx.beginPath();
+  ctx.moveTo(0, -s); ctx.lineTo(-s * 0.65, s * 0.8); ctx.lineTo(0, s * 0.4); ctx.lineTo(s * 0.65, s * 0.8);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = "#ffffff"; ctx.lineWidth = 1; ctx.stroke();
+
+  var k = this.state.keys;
+  if (k["w"] || k["W"] || k["ArrowUp"] || k["s"] || k["S"] || k["ArrowDown"] || k["a"] || k["A"] || k["ArrowLeft"] || k["d"] || k["D"] || k["ArrowRight"]) {
+    ctx.fillStyle = "rgba(255, 150, 0, " + (0.6 + Math.random() * 0.4) + ")";
+    ctx.beginPath();
+    ctx.moveTo(-6, s * 0.5); ctx.lineTo(6, s * 0.5); ctx.lineTo(0, s * (0.9 + Math.random() * 0.4));
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+};
+
+GameEngine.prototype.renderEnemy = function (ctx, e) {
+  ctx.save();
+  ctx.translate(e.x, e.y); ctx.rotate(e.angle + Math.PI / 2);
+  ctx.fillStyle = "#ff4400"; ctx.shadowColor = "#ff2200"; ctx.shadowBlur = 10;
+  ctx.beginPath(); ctx.moveTo(0, -14); ctx.lineTo(-10, 10); ctx.lineTo(0, 6); ctx.lineTo(10, 10); ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  var bw = 30, bh = 4;
+  ctx.fillStyle = "#333"; ctx.fillRect(e.x - bw / 2, e.y - 26, bw, bh);
+  ctx.fillStyle = "#ff4444"; ctx.fillRect(e.x - bw / 2, e.y - 26, (e.hp / e.maxHp) * bw, bh);
+  if (e.maxShield > 0) { ctx.fillStyle = "#4488ff"; ctx.fillRect(e.x - bw / 2, e.y - 20, (e.shield / e.maxShield) * bw, 3); }
+};
+
+GameEngine.prototype.renderBullets = function (ctx) {
+  this.state.bullets.forEach(function (b) {
+    ctx.save();
+    ctx.shadowColor = b.fromPlayer ? "#00ffff" : "#ff6600"; ctx.shadowBlur = 8;
+    ctx.fillStyle = b.fromPlayer ? "#00ffff" : "#ff8800";
+    ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  });
+};
+
+GameEngine.prototype.renderParticles = function (ctx) {
+  this.state.particles.forEach(function (pt) {
+    var alpha = pt.life / pt.maxLife;
+    ctx.globalAlpha = alpha; ctx.fillStyle = pt.color;
+    ctx.beginPath(); ctx.arc(pt.x, pt.y, pt.size * alpha, 0, Math.PI * 2); ctx.fill();
+  });
+  ctx.globalAlpha = 1;
+};
+
+GameEngine.prototype.renderHUD = function (ctx, sys) {
+  var p = this.state.player;
+  ctx.fillStyle = "rgba(0,0,20,0.7)"; ctx.fillRect(10, 10, 220, 130);
+  ctx.strokeStyle = "#224466"; ctx.lineWidth = 1; ctx.strokeRect(10, 10, 220, 130);
+
+  ctx.fillStyle = "#66aacc"; ctx.font = "12px Courier New"; ctx.textAlign = "left";
+  ctx.fillText("SYSTEM: " + sys.name, 20, 30);
+  ctx.fillText("CREDITS: " + Math.floor(p.credits) + " CR", 20, 48);
+  ctx.fillText("LEVEL: " + p.level + " | XP: " + p.xp + "/" + getXpForNextLevel(p.level), 20, 66);
+
+  ctx.fillStyle = "#333"; ctx.fillRect(20, 74, 190, 10);
+  ctx.fillStyle = "#ff4444"; ctx.fillRect(20, 74, Math.max(0, (p.hp / p.maxHp) * 190), 10);
+  ctx.fillStyle = "#88ccff"; ctx.font = "10px Courier New";
+  ctx.fillText("HULL: " + Math.ceil(p.hp) + "/" + p.maxHp, 20, 98);
+
+  ctx.fillStyle = "#333"; ctx.fillRect(20, 101, 190, 10);
+  ctx.fillStyle = "#4466ff"; ctx.fillRect(20, 101, Math.max(0, (p.shield / p.maxShield) * 190), 10);
+  ctx.fillStyle = "#88ccff"; ctx.fillText("SHIELD: " + Math.ceil(p.shield) + "/" + p.maxShield, 20, 124);
+
+  var cargo = p.cargo.reduce(function (a, c) { return a + c.amount; }, 0);
+  ctx.fillText("CARGO: " + cargo + "/" + p.cargoCapacity, 120, 98);
+
+  var enemies = sys.enemies.length;
+  if (enemies > 0) {
+    ctx.fillStyle = "#ff4444"; ctx.font = "13px Courier New"; ctx.textAlign = "right";
+    ctx.fillText("\u26A0 " + enemies + " PIRATE" + (enemies > 1 ? "S" : "") + " NEARBY", WIDTH - 20, 30);
+  }
+
+  if (this.state.combatLog.length > 0) {
+    ctx.fillStyle = "rgba(0,0,20,0.7)"; ctx.fillRect(WIDTH - 280, HEIGHT - 180, 270, 170);
+    ctx.strokeStyle = "#224466"; ctx.strokeRect(WIDTH - 280, HEIGHT - 180, 270, 170);
+    ctx.font = "11px Courier New";
+    this.state.combatLog.forEach(function (log, i) {
+      var alpha = 1 - i * 0.12;
+      ctx.globalAlpha = Math.max(0.2, alpha);
+      ctx.fillStyle = "#88ccff"; ctx.textAlign = "left";
+      ctx.fillText(log, WIDTH - 274, HEIGHT - 160 + i * 18);
+    });
+    ctx.globalAlpha = 1;
+  }
+
+  if (this.state.notification) {
+    var nalpha = Math.min(1, this.state.notification.ttl / 60);
+    ctx.globalAlpha = nalpha;
+    ctx.fillStyle = "rgba(0,20,40,0.85)";
+    var tw = ctx.measureText(this.state.notification.text).width;
+    ctx.fillRect(WIDTH / 2 - tw / 2 - 16, HEIGHT * 0.15 - 16, tw + 32, 32);
+    ctx.fillStyle = "#00ffaa"; ctx.font = "bold 15px Courier New"; ctx.textAlign = "center";
+    ctx.fillText(this.state.notification.text, WIDTH / 2, HEIGHT * 0.15 + 5);
+    ctx.globalAlpha = 1;
+  }
+
+  if (p.activeMissions.length > 0) {
+    ctx.fillStyle = "rgba(0,0,20,0.7)"; ctx.fillRect(10, HEIGHT - 140, 250, 130);
+    ctx.strokeStyle = "#224466"; ctx.strokeRect(10, HEIGHT - 140, 250, 130);
+    ctx.fillStyle = "#ffdd44"; ctx.font = "12px Courier New"; ctx.textAlign = "left";
+    ctx.fillText("ACTIVE MISSIONS", 20, HEIGHT - 122);
+    p.activeMissions.slice(0, 4).forEach(function (m, i) {
+      ctx.fillStyle = "#88aacc"; ctx.font = "10px Courier New";
+      var label = m.title;
+      if (m.type === "combat" && m.killsRequired) label += " (" + (m.killCount || 0) + "/" + m.killsRequired + ")";
+      ctx.fillText(label.length > 30 ? label.slice(0, 28) + "\u2026" : label, 20, HEIGHT - 104 + i * 20);
+    });
+  }
+
+  ctx.fillStyle = "#334455"; ctx.font = "11px Courier New"; ctx.textAlign = "center";
+  ctx.fillText("WASD: Move  |  Mouse: Fire  |  M: Star Map  |  Approach station to dock", WIDTH / 2, HEIGHT - 10);
+  ctx.textAlign = "left";
+};
+
+GameEngine.prototype.renderStarmap = function (ctx, canvas) {
+  ctx.fillStyle = "#000010"; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  var systemsObj = this.state.systems;
+  var systems = Object.keys(systemsObj).map(function (k) { return systemsObj[k]; });
+  var drawn = {};
+
+  systems.forEach(function (sys) {
+    sys.gates.forEach(function (gate) {
+      var key = [sys.id, gate.targetSystemId].sort().join("|");
+      if (!drawn[key]) {
+        drawn[key] = true;
+        var target = systemsObj[gate.targetSystemId];
+        if (!target) return;
+        ctx.strokeStyle = "#223344"; ctx.lineWidth = 1; ctx.setLineDash([5, 8]);
+        ctx.beginPath(); ctx.moveTo(sys.mapX, sys.mapY); ctx.lineTo(target.mapX, target.mapY); ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    });
+  });
+
+  var self = this;
+  systems.forEach(function (sys) {
+    var visited = self.state.player.systemsVisited.has(sys.id);
+    var isCurrent = sys.id === self.state.player.currentSystemId;
+    var isSelected = self.state.mapSelectedSystem === sys.id;
+
+    ctx.save();
+    ctx.shadowColor = sys.color; ctx.shadowBlur = isCurrent ? 30 : (isSelected ? 20 : 10);
+    ctx.fillStyle = visited ? sys.color : "#334455";
+    ctx.beginPath(); ctx.arc(sys.mapX, sys.mapY, isCurrent ? 14 : 10, 0, Math.PI * 2); ctx.fill();
+    if (isCurrent) { ctx.strokeStyle = "#00ffff"; ctx.lineWidth = 2; ctx.stroke(); }
+    ctx.restore();
+
+    ctx.fillStyle = visited ? "#ccddff" : "#445566"; ctx.font = "14px Courier New"; ctx.textAlign = "center";
+    ctx.fillText(sys.name, sys.mapX, sys.mapY + 26);
+    if (isCurrent) { ctx.fillStyle = "#00ffaa"; ctx.font = "11px Courier New"; ctx.fillText("\u25C4 YOU ARE HERE", sys.mapX, sys.mapY + 42); }
+  });
+
+  if (this.state.mapSelectedSystem) {
+    var sel = this.state.systems[this.state.mapSelectedSystem];
+    if (sel) {
+      ctx.fillStyle = "rgba(0,0,30,0.9)"; ctx.fillRect(WIDTH - 360, HEIGHT - 180, 350, 170);
+      ctx.strokeStyle = "#335577"; ctx.lineWidth = 1; ctx.strokeRect(WIDTH - 360, HEIGHT - 180, 350, 170);
+      ctx.fillStyle = "#88ccff"; ctx.font = "bold 15px Courier New"; ctx.textAlign = "left";
+      ctx.fillText(sel.name.toUpperCase(), WIDTH - 344, HEIGHT - 156);
+      ctx.font = "13px Courier New"; ctx.fillStyle = "#66aacc";
+      ctx.fillText("Stations: " + sel.stations.length, WIDTH - 344, HEIGHT - 132);
+      ctx.fillText("Jump Gates: " + sel.gates.length, WIDTH - 344, HEIGHT - 112);
+      ctx.fillStyle = this.state.player.systemsVisited.has(sel.id) ? "#44ff88" : "#ff8844";
+      ctx.fillText(this.state.player.systemsVisited.has(sel.id) ? "Status: Visited" : "Status: Unknown", WIDTH - 344, HEIGHT - 92);
+      sel.stations.forEach(function (st, i) {
+        ctx.fillStyle = "#88aacc"; ctx.font = "12px Courier New";
+        ctx.fillText("\u2022 " + st.name, WIDTH - 344, HEIGHT - 68 + i * 18);
+      });
+    }
+  }
+
+  ctx.fillStyle = "#00ffcc"; ctx.font = "bold 18px Courier New"; ctx.textAlign = "center";
+  ctx.fillText("STAR MAP", WIDTH / 2, 40);
+  ctx.fillStyle = "#445566"; ctx.font = "13px Courier New";
+  ctx.fillText("Click a system to view details  |  Press M to close", WIDTH / 2, HEIGHT - 20);
+};
+
+GameEngine.prototype.renderGameOver = function (ctx, canvas) {
+  ctx.fillStyle = "#000008"; ctx.fillRect(0, 0, WIDTH, HEIGHT);
+  ctx.save();
+  ctx.shadowColor = "#ff2200"; ctx.shadowBlur = 40; ctx.fillStyle = "#ff4422";
+  ctx.font = "bold " + Math.floor(HEIGHT * 0.1) + "px Courier New"; ctx.textAlign = "center";
+  ctx.fillText("SHIP DESTROYED", WIDTH / 2, HEIGHT * 0.38);
+  ctx.restore();
+  ctx.fillStyle = "#88aacc"; ctx.font = Math.floor(HEIGHT * 0.03) + "px Courier New";
+  ctx.fillText("Total Kills: " + this.state.player.totalKills, WIDTH / 2, HEIGHT * 0.52);
+  ctx.fillText("Credits Earned: " + Math.floor(this.state.player.credits) + " CR", WIDTH / 2, HEIGHT * 0.58);
+  ctx.fillText("Level Reached: " + this.state.player.level, WIDTH / 2, HEIGHT * 0.64);
+  ctx.fillStyle = "#00ff88"; ctx.font = Math.floor(HEIGHT * 0.03) + "px Courier New";
+  ctx.fillText("[ PRESS SPACE OR CLICK TO RESTART ]", WIDTH / 2, HEIGHT * 0.76);
+};
+
+/* ---- input handlers ---- */
+
+GameEngine.prototype.handleKeyDown = function (key) {
+  this.state.keys[key] = true;
+  if (key === "m" || key === "M") {
+    if (this.state.screen === "space") { this.state.screen = "starmap"; this.state.mapSelectedSystem = this.state.player.currentSystemId; this.onStateChange(); }
+    else if (this.state.screen === "starmap") { this.state.screen = "space"; this.onStateChange(); }
+  }
+  if (key === " " || key === "Escape") {
+    if (this.state.screen === "title") { this.state.screen = "space"; this.onStateChange(); }
+    else if (this.state.screen === "gameover") { this.restartGame(); }
+    else if (this.state.screen === "starmap") { this.state.screen = "space"; this.onStateChange(); }
+  }
+};
+GameEngine.prototype.handleKeyUp = function (key) { this.state.keys[key] = false; };
+GameEngine.prototype.handleMouseMove = function (x, y) { this.state.mouseX = x; this.state.mouseY = y; };
+GameEngine.prototype.handleMouseDown = function (x, y) {
+  this.state.mouseDown = true; this.state.mouseX = x; this.state.mouseY = y;
+  if (this.state.screen === "title") { this.state.screen = "space"; this.onStateChange(); }
+  else if (this.state.screen === "gameover") { this.restartGame(); }
+  else if (this.state.screen === "starmap" && this.canvas) {
+    var rect = this.canvas.getBoundingClientRect();
+    var scaleX = WIDTH / rect.width, scaleY = HEIGHT / rect.height;
+    var cx = x * scaleX, cy = y * scaleY;
+    var systemsObj = this.state.systems;
+    var self = this;
+    Object.keys(systemsObj).some(function (k) {
+      var sys = systemsObj[k];
+      var dx = cx - sys.mapX, dy = cy - sys.mapY;
+      if (Math.sqrt(dx * dx + dy * dy) < 20) { self.state.mapSelectedSystem = sys.id; self.onStateChange(); return true; }
+      return false;
+    });
+  }
+};
+GameEngine.prototype.handleMouseUp = function () { this.state.mouseDown = false; };
+
+GameEngine.prototype.undock = function () {
+  var p = this.state.player;
+  var sys = this.state.systems[p.currentSystemId];
+  if (!sys) return;
+  var station = sys.stations.find(function (s) { return s.id === p.dockedStationId; });
+  if (station) { p.x = station.x + 90; p.y = station.y; }
+  p.dockedStationId = null;
+  this.state.screen = "space";
+  this.onStateChange();
+};
+
+GameEngine.prototype.buyItem = function (stationId, commodity, amount) {
+  var p = this.state.player;
+  var sys = this.state.systems[p.currentSystemId];
+  var station = sys && sys.stations.find(function (s) { return s.id === stationId; });
+  if (!station) return;
+  var price = Math.floor(station.prices[commodity] * amount);
+  var cargoUsed = p.cargo.reduce(function (a, c) { return a + c.amount; }, 0);
+  if (cargoUsed + amount > p.cargoCapacity) { this.notify("Not enough cargo space!"); this.onStateChange(); return; }
+  if (p.credits < price) { this.notify("Not enough credits!"); this.onStateChange(); return; }
+  p.credits -= price;
+  var existing = p.cargo.find(function (c) { return c.commodity === commodity; });
+  if (existing) {
+    var totalCost = existing.buyPrice * existing.amount + price;
+    existing.amount += amount;
+    existing.buyPrice = totalCost / existing.amount;
+  } else {
+    p.cargo.push({ commodity: commodity, amount: amount, buyPrice: station.prices[commodity] });
+  }
+  this.notify("Purchased " + amount + "x " + commodity + " for " + price + " CR");
+  this.onStateChange();
+};
+
+GameEngine.prototype.sellItem = function (stationId, commodity, amount) {
+  var p = this.state.player;
+  var sys = this.state.systems[p.currentSystemId];
+  var station = sys && sys.stations.find(function (s) { return s.id === stationId; });
+  if (!station) return;
+  var cargoItem = p.cargo.find(function (c) { return c.commodity === commodity; });
+  if (!cargoItem || cargoItem.amount < amount) { this.notify("Not enough cargo!"); this.onStateChange(); return; }
+  var salePrice = Math.floor(station.prices[commodity] * amount);
+  p.credits += salePrice;
+  var profit = salePrice - Math.floor(cargoItem.buyPrice * amount);
+  cargoItem.amount -= amount;
+  if (cargoItem.amount <= 0) p.cargo = p.cargo.filter(function (c) { return c.commodity !== commodity; });
+  this.notify("Sold " + amount + "x " + commodity + " for " + salePrice + " CR (profit: " + (profit >= 0 ? "+" : "") + profit + " CR)");
+  this.onStateChange();
+};
+
+GameEngine.prototype.acceptMission = function (stationId, missionId) {
+  var p = this.state.player;
+  if (p.activeMissions.length >= 4) { this.notify("Mission log full (max 4 active)"); this.onStateChange(); return; }
+  var sys = this.state.systems[p.currentSystemId];
+  var station = sys && sys.stations.find(function (s) { return s.id === stationId; });
+  if (!station) return;
+  var mission = station.missions.find(function (m) { return m.id === missionId; });
+  if (!mission) return;
+  mission.accepted = true;
+  p.activeMissions.push(Object.assign({}, mission));
+  station.missions = station.missions.filter(function (m) { return m.id !== missionId; });
+  this.notify("Mission accepted: " + mission.title);
+  this.onStateChange();
+};
+
+GameEngine.prototype.buyUpgrade = function (upgradeId) {
+  var p = this.state.player;
+  var upg = UPGRADES.find(function (u) { return u.id === upgradeId; });
+  if (!upg) return;
+  if (p.credits < upg.cost) { this.notify("Not enough credits!"); this.onStateChange(); return; }
+  p.credits -= upg.cost;
+  var stats = p.shipStats;
+  stats[upg.stat] = +(stats[upg.stat] + upg.delta).toFixed(2);
+  if (upg.stat === "maxShield") p.shield = Math.min(p.shield + upg.delta, stats.maxShield);
+  if (upg.stat === "maxHull") p.hp = Math.min(p.hp + upg.delta * 0.5, stats.maxHull);
+  this.notify("Installed: " + upg.name);
+  this.onStateChange();
+};
+
+GameEngine.prototype.buyShip = function (shipType) {
+  var p = this.state.player;
+  var newStats = SHIP_STATS[shipType];
+  if (!newStats) return;
+  if (p.credits < newStats.cost) { this.notify("Not enough credits!"); this.onStateChange(); return; }
+  p.credits -= newStats.cost;
+  p.shipStats = Object.assign({}, newStats);
+  p.maxHp = newStats.maxHull; p.hp = newStats.maxHull;
+  p.maxShield = newStats.maxShield; p.shield = newStats.maxShield;
+  p.cargoCapacity = newStats.cargoCapacity;
+  p.cargo = [];
+  this.notify("Purchased " + newStats.name + "!");
+  this.onStateChange();
+};
+
+GameEngine.prototype.restartGame = function () {
+  this.resetState();
+  this.state.screen = "space";
+  this.onStateChange();
+};
+
+/* ---------------- STATION UI (vanilla DOM, replaces React StationUI.tsx) ---------------- */
+
+var stationTabState = "trade";
+var stationAmounts = {};
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
+}
+
+function calcPrice(station, commodity, amount) {
+  var base = station.prices[commodity] || 0;
+  var supply = station.supply[commodity] || 50;
+  var demand = station.demand[commodity] || 50;
+  var dynamic = base * (1 + (demand - supply) / 100);
+  return Math.max(1, Math.floor(dynamic * amount));
+}
+
+function renderStationUI(engine, station, player) {
+  var container = document.getElementById("stationUI");
+  var cargoUsed = player.cargo.reduce(function (a, c) { return a + c.amount; }, 0);
+  var tabs = ["trade", "missions", "upgrades", "shipyard"];
+
+  var html = '';
+  html += '<div class="station-header"><div>';
+  html += '<h1 class="station-name">' + esc(station.name) + '</h1>';
+  html += '<p class="station-system">System: ' + esc(engine.state.systems[player.currentSystemId].name) + '</p>';
+  html += '</div><div class="player-info">';
+  html += '<span class="credits">\u25C8 ' + Math.floor(player.credits) + ' CR</span>';
+  html += '<span class="cargo-info">Cargo: ' + cargoUsed + '/' + player.cargoCapacity + '</span>';
+  html += '</div></div>';
+
+  html += '<div class="tab-bar">';
+  tabs.forEach(function (t) {
+    html += '<button class="tab-btn ' + (stationTabState === t ? 'active' : '') + '" data-tab="' + t + '">' + t.toUpperCase() + '</button>';
+  });
+  html += '<button class="undock-btn" id="undockBtn">\u26A1 UNDOCK</button></div>';
+
+  html += '<div class="tab-content">';
+
+  if (stationTabState === "trade") {
+    html += '<div class="trade-panel"><div class="trade-grid">';
+    html += '<div class="trade-header-row"><span>COMMODITY</span><span>BUY</span><span>SELL</span><span>CARGO</span><span>QTY</span><span>ACTION</span></div>';
+    COMMODITIES.forEach(function (com) {
+      var buyPrice = calcPrice(station, com.id, 1);
+      var sellPrice = Math.floor(buyPrice * 0.88);
+      var inCargo = player.cargo.find(function (c) { return c.commodity === com.id; });
+      var qty = stationAmounts[com.id] || 1;
+      var canBuy = player.credits >= buyPrice * qty && cargoUsed + qty <= player.cargoCapacity;
+      var canSell = (inCargo ? inCargo.amount : 0) >= qty;
+      var profit = inCargo ? sellPrice - inCargo.buyPrice : 0;
+      html += '<div class="trade-row">';
+      html += '<span class="commodity-name" style="color:' + com.color + '">' + esc(com.name) + '</span>';
+      html += '<span class="price-buy">' + buyPrice + ' CR</span>';
+      html += '<span class="price-sell">' + sellPrice + ' CR' + (inCargo ? ' <span class="' + (profit >= 0 ? 'profit-pos' : 'profit-neg') + '">(' + (profit >= 0 ? '+' : '') + Math.floor(profit) + ')</span>' : '') + '</span>';
+      html += '<span class="cargo-amount">' + (inCargo ? inCargo.amount + 't' : '\u2014') + '</span>';
+      html += '<input type="number" min="1" max="50" value="' + qty + '" class="qty-input" data-qty="' + com.id + '">';
+      html += '<div class="action-btns">';
+      html += '<button class="buy-btn" data-buy="' + com.id + '" ' + (canBuy ? '' : 'disabled') + '>BUY</button>';
+      html += '<button class="sell-btn" data-sell="' + com.id + '" ' + (canSell ? '' : 'disabled') + '>SELL</button>';
+      html += '</div></div>';
+    });
+    html += '</div><div class="trade-tip">Tip: Buy low in supply-heavy systems, sell high in demand-heavy ones. Prices fluctuate over time.</div></div>';
+  }
+
+  if (stationTabState === "missions") {
+    html += '<div class="missions-panel"><div class="missions-header"><h2>Available Missions (' + station.missions.length + ')</h2><span class="active-count">Active: ' + player.activeMissions.length + '/4</span></div>';
+    if (station.missions.length === 0) {
+      html += '<div class="empty-state">No missions available. Check back later.</div>';
+    } else {
+      html += '<div class="mission-list">';
+      station.missions.forEach(function (m) {
+        html += '<div class="mission-card ' + m.type + '"><div class="mission-top"><span class="mission-type-badge ' + m.type + '">' + m.type.toUpperCase() + '</span><span class="mission-reward">+' + m.reward + ' CR / +' + m.xpReward + ' XP</span></div>';
+        html += '<h3 class="mission-title">' + esc(m.title) + '</h3><p class="mission-desc">' + esc(m.description) + '</p>';
+        html += '<button class="accept-btn" data-accept="' + m.id + '" ' + (player.activeMissions.length >= 4 ? 'disabled' : '') + '>ACCEPT MISSION</button></div>';
+      });
+      html += '</div>';
+    }
+    if (player.activeMissions.length > 0) {
+      html += '<div class="active-missions"><h2>Your Active Missions</h2>';
+      player.activeMissions.forEach(function (m) {
+        html += '<div class="mission-card active ' + m.type + '"><div class="mission-top"><span class="mission-type-badge ' + m.type + '">' + m.type.toUpperCase() + '</span><span class="mission-reward">+' + m.reward + ' CR</span></div>';
+        html += '<h3 class="mission-title">' + esc(m.title) + '</h3><p class="mission-desc">' + esc(m.description) + '</p>';
+        if (m.type === "combat" && m.killsRequired) {
+          var pct = ((m.killCount || 0) / m.killsRequired) * 100;
+          html += '<div class="progress-bar-wrap"><div class="progress-bar" style="width:' + pct + '%"></div><span>' + (m.killCount || 0) + '/' + m.killsRequired + ' kills</span></div>';
+        }
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+  }
+
+  if (stationTabState === "upgrades") {
+    html += '<div class="upgrades-panel"><h2>Ship Upgrades</h2><div class="ship-stats-panel"><h3>Current Ship: ' + esc(player.shipStats.name) + '</h3><div class="stats-grid">';
+    html += statBar("Speed", player.shipStats.speed, 7, "", "#00ffcc");
+    html += statBar("Shield", player.shipStats.maxShield, 200, "HP", "#4466ff");
+    html += statBar("Hull", player.shipStats.maxHull, 200, "HP", "#ff4444");
+    html += statBar("Cargo", player.shipStats.cargoCapacity, 150, "t", "#ffaa44");
+    html += statBar("Fire Rate", 24 - player.shipStats.fireRate, 20, "", "#ff88ff");
+    html += statBar("Damage", player.shipStats.bulletDamage, 40, "", "#ffdd44");
+    html += '</div></div><div class="upgrade-list">';
+    UPGRADES.forEach(function (upg) {
+      var canAfford = player.credits >= upg.cost;
+      html += '<div class="upgrade-card ' + (canAfford ? '' : 'unaffordable') + '"><div class="upgrade-top"><span class="upgrade-name">' + esc(upg.name) + '</span><span class="upgrade-cost">' + upg.cost + ' CR</span></div>';
+      html += '<p class="upgrade-desc">' + esc(upg.description) + '</p>';
+      html += '<button class="upgrade-btn" data-upgrade="' + upg.id + '" ' + (canAfford ? '' : 'disabled') + '>' + (canAfford ? 'INSTALL' : 'INSUFFICIENT CREDITS') + '</button></div>';
+    });
+    html += '</div></div>';
+  }
+
+  if (stationTabState === "shipyard") {
+    html += '<div class="shipyard-panel"><h2>Shipyard</h2><p class="shipyard-note">Purchase a new ship. Your current cargo will be lost on ship change.</p><div class="ship-list">';
+    Object.keys(SHIP_STATS).forEach(function (key) {
+      var ship = SHIP_STATS[key];
+      var isCurrent = player.shipStats.type === ship.type;
+      var canAfford = player.credits >= ship.cost;
+      html += '<div class="ship-card ' + (isCurrent ? 'current' : '') + ' ' + (!canAfford && !isCurrent ? 'unaffordable' : '') + '">';
+      html += '<div class="ship-top"><span class="ship-name">' + esc(ship.name) + '</span>' + (isCurrent ? '<span class="current-badge">CURRENT</span>' : '<span class="ship-cost">' + (ship.cost === 0 ? 'Starter' : ship.cost + ' CR') + '</span>') + '</div>';
+      html += '<div class="ship-specs"><div class="spec"><label>Speed</label><span>' + ship.speed + '</span></div><div class="spec"><label>Shield</label><span>' + ship.maxShield + '</span></div><div class="spec"><label>Hull</label><span>' + ship.maxHull + '</span></div><div class="spec"><label>Cargo</label><span>' + ship.cargoCapacity + 't</span></div><div class="spec"><label>Damage</label><span>' + ship.bulletDamage + '</span></div></div>';
+      if (!isCurrent) {
+        html += '<button class="buy-ship-btn" data-buyship="' + ship.type + '" ' + (canAfford ? '' : 'disabled') + '>' + (canAfford ? 'BUY ' + ship.name.toUpperCase() : 'INSUFFICIENT CREDITS') + '</button>';
+      }
+      html += '</div>';
+    });
+    html += '</div></div>';
+  }
+
+  html += '</div>';
+  container.innerHTML = html;
+  wireStationEvents(engine, station);
+}
+
+function statBar(label, value, max, unit, color) {
+  var pct = Math.min(100, (value / max) * 100);
+  var display = (typeof value === "number" && !Number.isInteger(value)) ? value.toFixed(1) : value;
+  return '<div class="stat-bar-row"><span class="stat-label">' + label + '</span><div class="stat-bar-bg"><div class="stat-bar-fill" style="width:' + pct + '%;background:' + color + '"></div></div><span class="stat-value" style="color:' + color + '">' + display + unit + '</span></div>';
+}
+
+function wireStationEvents(engine, station) {
+  var container = document.getElementById("stationUI");
+  container.querySelectorAll("[data-tab]").forEach(function (btn) {
+    btn.addEventListener("click", function () { stationTabState = btn.getAttribute("data-tab"); refreshStationUI(engine); });
+  });
+  var undockBtn = document.getElementById("undockBtn");
+  if (undockBtn) undockBtn.addEventListener("click", function () { engine.undock(); });
+
+  container.querySelectorAll("[data-qty]").forEach(function (inp) {
+    inp.addEventListener("change", function () {
+      var id = inp.getAttribute("data-qty");
+      stationAmounts[id] = Math.max(1, parseInt(inp.value, 10) || 1);
+      refreshStationUI(engine);
+    });
+  });
+  container.querySelectorAll("[data-buy]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = btn.getAttribute("data-buy");
+      engine.buyItem(station.id, id, stationAmounts[id] || 1);
+    });
+  });
+  container.querySelectorAll("[data-sell]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var id = btn.getAttribute("data-sell");
+      engine.sellItem(station.id, id, stationAmounts[id] || 1);
+    });
+  });
+  container.querySelectorAll("[data-accept]").forEach(function (btn) {
+    btn.addEventListener("click", function () { engine.acceptMission(station.id, btn.getAttribute("data-accept")); });
+  });
+  container.querySelectorAll("[data-upgrade]").forEach(function (btn) {
+    btn.addEventListener("click", function () { engine.buyUpgrade(btn.getAttribute("data-upgrade")); });
+  });
+  container.querySelectorAll("[data-buyship]").forEach(function (btn) {
+    btn.addEventListener("click", function () { engine.buyShip(btn.getAttribute("data-buyship")); });
+  });
+}
+
+function refreshStationUI(engine) {
+  var p = engine.state.player;
+  var sys = engine.state.systems[p.currentSystemId];
+  var station = sys.stations.find(function (s) { return s.id === p.dockedStationId; });
+  if (station) renderStationUI(engine, station, p);
+}
+
+/* ---------------- BOOT ---------------- */
+
+var canvas = document.getElementById("gameCanvas");
+var overlay = document.getElementById("stationOverlay");
+var engine;
+
+function onStateChange() {
+  var screen = engine.state.screen;
+  var isStation = screen === "station";
+  canvas.style.display = isStation ? "none" : "block";
+  if (isStation) {
+    overlay.classList.add("visible");
+    var p = engine.state.player;
+    var sys = engine.state.systems[p.currentSystemId];
+    var station = sys.stations.find(function (s) { return s.id === p.dockedStationId; });
+    if (station) renderStationUI(engine, station, p);
+  } else {
+    overlay.classList.remove("visible");
+  }
+}
+
+try {
+  engine = new GameEngine(onStateChange);
+  engine.mount(canvas);
+
+  window.addEventListener("keydown", function (e) {
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].indexOf(e.key) !== -1) e.preventDefault();
+    engine.handleKeyDown(e.key);
+  });
+  window.addEventListener("keyup", function (e) { engine.handleKeyUp(e.key); });
+
+  canvas.addEventListener("mousemove", function (e) {
+    var rect = canvas.getBoundingClientRect();
+    engine.handleMouseMove(e.clientX - rect.left, e.clientY - rect.top);
+  });
+  canvas.addEventListener("mousedown", function (e) {
+    var rect = canvas.getBoundingClientRect();
+    engine.handleMouseDown(e.clientX - rect.left, e.clientY - rect.top);
+  });
+  canvas.addEventListener("mouseup", function () { engine.handleMouseUp(); });
+  canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+} catch (err) {
+  showError(err.message);
+}
+</script>
+</body>
+</html>
